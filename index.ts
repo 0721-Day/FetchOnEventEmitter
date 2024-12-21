@@ -83,6 +83,11 @@ export class EventFetch<
   constructor(selfId: string) {
     super();
     this._selfId = selfId;
+
+    // 注册事件
+    this.on('EventFetch:Fetch:Response',(v=>{
+      this._EventToResponseHandler.get(v.header.requestId)?.(v)
+    }))
   }
 
   private _EventToResponseHandler = new Map<
@@ -101,26 +106,26 @@ export class EventFetch<
     remoteId: string = this._selfId
   ) {
     const requestId = this._createRequestId();
-
     return new Promise<
       EventFetchResponseDataFormat<EventFetchApi[ApiKey][1], ApiKey>
     >((resolve, reject) => {
-      // 请求相应回调
-      const eventClose = this.on(
-        "EventFetch:Fetch:Response",
-        (v: EventFetchResponseDataFormat<EventFetchApi[ApiKey][1], ApiKey>) => {
-          // 判断是否是当前请求
-          if (v.header.requestId !== requestId) return;
-          // 判断是否来自被请求者
-          if (v.userInfo.replayerId !== remoteId) return;
-          // 判断是否为自己发送的请求
-          if (v.userInfo.requesterId !== this._selfId) return;
 
-          eventClose();
-          clearTimeout(timer);
-          resolve(v);
-        }
-      );
+      const eventClose = ()=> this._EventToResponseHandler.delete(requestId);
+
+      this._EventToResponseHandler.set(requestId, (v) =>{
+        // 判断是否是当前请求
+        if (v.header.requestId !== requestId) return;
+         // 判断是否来自被请求者
+         if (v.userInfo.replayerId !== remoteId) return;
+         // 判断是否为自己发送的请求
+         if (v.userInfo.requesterId !== this._selfId) return;
+
+         eventClose();
+         clearTimeout(timer);
+
+         // @ts-ignore
+         resolve(v);
+      });
 
       // 超时处理
       const timer = setTimeout(() => {
@@ -146,7 +151,8 @@ export class EventFetch<
       };
 
       this.emit("EventFetch:Fetch:Request", EventFetchRequestData);
-    });
+    })
+
   }
 
   public onFetch<ApiKey extends keyof EventFetchApi>(
