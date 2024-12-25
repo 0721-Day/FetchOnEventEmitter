@@ -8,12 +8,18 @@ export default class EventEmitter<EventKeyValues> {
   } = {};
 
   public on<EventKey extends keyof EventKeyValues>(
-    event: EventKey,
+    events: EventKey | EventKey[],
     handler: (data: EventKeyValues[EventKey] & { eventTag: EventKey }) => void
   ): () => void {
-    if (!this._events[event]) this._events[event] = [];
-    this._events[event]!.push(handler);
-    return () => this.off(event, handler);
+
+    const eventArray = Array.isArray(events) ? events : [events];
+    
+    eventArray.forEach((event) => {
+      if (!this._events[event]) this._events[event] = [];
+      this._events[event]!.push(handler);
+    });
+
+    return () => eventArray.forEach((event) => this.off(event, handler));
   }
 
   public off<EventKey extends keyof EventKeyValues>(
