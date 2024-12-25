@@ -2,30 +2,38 @@ export default class EventEmitter<EventKeyValues> {
   constructor() {}
 
   private _events: {
-    [K in keyof EventKeyValues]?: ((data: EventKeyValues[K]) => void)[];
+    [K in keyof EventKeyValues]?: ((
+      data: EventKeyValues[K] & { eventTag: K }
+    ) => void)[];
   } = {};
 
   public on<EventKey extends keyof EventKeyValues>(
-    a: EventKey,
-    handler: (data: EventKeyValues[EventKey]) => void
-  ) {
-    if (!this._events[a]) this._events[a] = [];
-    this._events[a].push(handler);
-    return () => this.off(a, handler);
+    event: EventKey,
+    handler: (data: EventKeyValues[EventKey] & { eventTag: EventKey }) => void
+  ): () => void {
+    if (!this._events[event]) this._events[event] = [];
+    this._events[event]!.push(handler);
+    return () => this.off(event, handler);
   }
 
   public off<EventKey extends keyof EventKeyValues>(
-    a: EventKey,
-    handler: (data: EventKeyValues[EventKey]) => void
-  ) {
-    const index = this._events[a]?.indexOf(handler);
-    if (index !== undefined && index !== -1) this._events[a]!.splice(index, 1);
+    event: EventKey,
+    handler: (data: EventKeyValues[EventKey] & { eventTag: EventKey }) => void
+  ): void {
+    const handlers = this._events[event];
+    if (handlers) {
+      const index = handlers.indexOf(handler);
+      if (index !== -1) handlers.splice(index, 1);
+    }
   }
 
   public emit<EventKey extends keyof EventKeyValues>(
-    a: EventKey,
+    event: EventKey,
     data: EventKeyValues[EventKey]
-  ) {
-    this._events[a]?.forEach((v) => v(data));
+  ): void {
+    const handlers = this._events[event];
+    if (handlers) {
+      handlers.forEach((handler) => handler({ ...data, eventTag: event }));
+    }
   }
 }
