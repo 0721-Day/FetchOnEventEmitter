@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "target": "es2016",
+    "module": "ESNext",
+    "rootDir": ".",
+    "baseUrl": ".",
+    "outDir": "./dist",
+    "declaration": true,
+    "skipLibCheck": true,
+    "newLine": "LF",
+  },
+  "include": ["src/index.ts"]
+}
