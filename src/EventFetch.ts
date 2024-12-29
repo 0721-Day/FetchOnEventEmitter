@@ -76,9 +76,19 @@ export default class EventFetch<
     remoteId: string = this._selfId
   ):Promise<EventFetchResponseDataFormat<EventFetchApi[ApiKey][1], ApiKey>> {
     const requestId = this._createRequestId();
-    return new Promise<
+
+    // 创建超时Promise
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => {
+        this._EventToResponseHandler.delete(requestId);
+        reject({ code: "TIMEOUT", message: "Request timed out" });
+      }, 5000);
+    }); 
+
+    // 创建请求Promise
+    const Request =  new Promise<
       EventFetchResponseDataFormat<EventFetchApi[ApiKey][1], ApiKey>
-    >((resolve, reject) => {
+    >((resolve) => {
       const eventClose = () => this._EventToResponseHandler.delete(requestId);
 
       this._EventToResponseHandler.set(requestId, (v) => {
@@ -90,17 +100,11 @@ export default class EventFetch<
         if (v.userInfo.requesterId !== this._selfId) return;
 
         eventClose();
-        clearTimeout(timer);
 
         // @ts-ignore
         resolve(v);
       });
 
-      // 超时处理
-      const timer = setTimeout(() => {
-        eventClose();
-        reject({ code: "TIMEOUT", message: "Request timed out" });
-      }, 5000);
 
       const EventFetchRequestData: EventFetchRequestDataFormat<
         EventFetchApi[ApiKey][0],
@@ -121,6 +125,9 @@ export default class EventFetch<
 
       this.emit("EventFetch:Fetch:Request", EventFetchRequestData);
     });
+
+    // 返回请求结果
+    return Promise.race([Request, timeoutPromise]);
   }
 
   public onFetch<ApiKey extends keyof EventFetchApi>(
