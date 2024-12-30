@@ -12,7 +12,6 @@ type EventFetchRequestHander<ApiKey> = {
   apiKey: ApiKey;
 };
 
-
 type EventFetchRequestDataFormat<T, ApiKey> = {
   data: T;
   header: EventFetchRequestHander<ApiKey>;
@@ -31,7 +30,6 @@ type EventFetchResponseDataFormat<T, ApiKey> = {
   };
 };
 
-
 export default class EventFetch<
   EventFetchApi extends {
     [ApiKey in keyof EventFetchApi]: [
@@ -43,18 +41,20 @@ export default class EventFetch<
 > extends EventEmitter<EventKeyValues & EventFetchExtendEventBus> {
   private _selfId: string;
 
-  private _createSelfId = () => "u-" + Math.random().toString(36).substring(2, 15);
+  private _createSelfId = () =>
+    "u-" + Math.random().toString(36).substring(2, 15);
 
   constructor(selfId?: string) {
     super();
     this._selfId = selfId ?? this._createSelfId();
 
-    // 注册事件
+    // 在总线上监听请求的响应
     this.on(
       "EventFetch:Fetch:Response",
       <ApiKey extends keyof EventFetchApi>(
         v: EventFetchResponseDataFormat<EventFetchApi[ApiKey][1], ApiKey>
       ) => {
+        // 根据请求ID触发相应函数
         this._EventToResponseHandler.get(v.header.requestId)?.(v);
       }
     );
@@ -70,11 +70,52 @@ export default class EventFetch<
   private _createRequestId = () =>
     "o-" + Math.random().toString(36).substring(2, 15);
 
+  /**
+   * 发起一个 API 请求，并返回一个 Promise，等待响应或超时。
+   *
+   * @template ApiKey - API 键的类型，必须是 `EventFetchApi` 的键之一。
+   * @param {ApiKey} api - 要调用的 API 键。
+   * @param {EventFetchApi[ApiKey][0]} params - API 请求的参数。
+   * @param {string} [remoteId] - 远程目标 ID，默认为当前实例的 ID。
+   * @param {number} [timeout=5000] - 请求超时时间（毫秒），默认为 5000 毫秒。
+   * @returns {Promise<EventFetchResponseDataFormat<EventFetchApi[ApiKey][1], ApiKey>>} - 返回一个 Promise，解析为 API 响应数据。
+   * @throws {Object} - 如果请求超时，返回一个包含 `code` 和 `message` 的对象，例如 `{ code: "TIMEOUT", message: "Request timed out" }`。
+   *
+   * @example
+   * // 发起一个 API 请求
+   * eventFetch.Fetch("EFetch:RTCManager:Auth", { token: "abc123" })
+   *   .then((response) => {
+   *     console.log("API 响应:", response.data);
+   *   })
+   *   .catch((error) => {
+   *     if (error.code === "TIMEOUT") {
+   *       console.error("请求超时:", error.message);
+   *     } else {
+   *       console.error("请求失败:", error);
+   *     }
+   *   });
+   *
+   * @example
+   * // 使用 async/await 处理响应
+   * (async () => {
+   *   try {
+   *     const response = await eventFetch.Fetch("EFetch:RTCManager:Auth", { token: "abc123" });
+   *     console.log("API 响应:", response.data);
+   *   } catch (error) {
+   *     if (error.code === "TIMEOUT") {
+   *       console.error("请求超时:", error.message);
+   *     } else {
+   *       console.error("请求失败:", error);
+   *     }
+   *   }
+   * })();
+   */
   public Fetch<ApiKey extends keyof EventFetchApi>(
     api: ApiKey,
     params: EventFetchApi[ApiKey][0],
-    remoteId: string = this._selfId
-  ):Promise<EventFetchResponseDataFormat<EventFetchApi[ApiKey][1], ApiKey>> {
+    remoteId: string = this._selfId,
+    timeout: number = 5000
+  ): Promise<EventFetchResponseDataFormat<EventFetchApi[ApiKey][1], ApiKey>> {
     const requestId = this._createRequestId();
 
     // 创建超时Promise
@@ -82,11 +123,11 @@ export default class EventFetch<
       setTimeout(() => {
         this._EventToResponseHandler.delete(requestId);
         reject({ code: "TIMEOUT", message: "Request timed out" });
-      }, 5000);
-    }); 
+      }, timeout);
+    });
 
     // 创建请求Promise
-    const Request =  new Promise<
+    const Request = new Promise<
       EventFetchResponseDataFormat<EventFetchApi[ApiKey][1], ApiKey>
     >((resolve) => {
       const eventClose = () => this._EventToResponseHandler.delete(requestId);
@@ -104,7 +145,6 @@ export default class EventFetch<
         // @ts-ignore
         resolve(v);
       });
-
 
       const EventFetchRequestData: EventFetchRequestDataFormat<
         EventFetchApi[ApiKey][0],
@@ -130,6 +170,39 @@ export default class EventFetch<
     return Promise.race([Request, timeoutPromise]);
   }
 
+  /**
+   * 注册一个处理函数，用于处理特定 API 的请求，并返回响应数据。
+   *
+   * @template ApiKey - API 键的类型，必须是 `EventFetchApi` 的键之一。
+   * @param {ApiKey} api - 要处理的 API 键。
+   * @param {(val: EventFetchRequestDataFormat<EventFetchApi[ApiKey][0], ApiKey>) => EventFetchResponseDataFormat<EventFetchApi[ApiKey][1], ApiKey>["data"] | Promise<EventFetchResponseDataFormat<EventFetchApi[ApiKey][1], ApiKey>["data"]> | void} handler - 处理函数，用于处理请求并返回响应数据。如果返回 `void`，则不发送响应。
+   * @returns {() => void} - 返回一个函数，调用该函数可以取消注册的处理函数。
+   *
+   * @example
+   * // 使用同步处理函数
+   * eventFetch.onFetch("EFetch:RTCManager:Auth", (val) => {
+   *   console.log("收到请求:", val.data);
+   *   return { success: true, message: "授权成功" };
+   * });
+   *
+   * @example
+   * // 使用异步处理函数
+   * eventFetch.onFetch("EFetch:RTCManager:Auth", async (val) => {
+   *   console.log("收到请求:", val.data);
+   *   const result = await someAsyncOperation(val.data);
+   *   return { success: true, message: "授权成功", data: result };
+   * });
+   *
+   * @example
+   * // 取消注册的处理函数
+   * const unsubscribe = eventFetch.onFetch("EFetch:RTCManager:Auth", (val) => {
+   *   console.log("收到请求:", val.data);
+   *   return { success: true, message: "授权成功" };
+   * });
+   *
+   * // 取消注册
+   * unsubscribe();
+   */
   public onFetch<ApiKey extends keyof EventFetchApi>(
     api: ApiKey,
     handler: (
