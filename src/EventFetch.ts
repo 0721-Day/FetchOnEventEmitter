@@ -44,6 +44,21 @@ export default class EventFetch<
   private _createSelfId = () =>
     "u-" + Math.random().toString(36).substring(2, 15);
 
+  /**
+ * 创建一个 `EventFetch` 实例，用于管理 API 请求和响应事件。
+ *
+ * @template EventFetchApi - API 定义的泛型类型，表示 API 键与其请求和响应数据类型的映射。
+ * @template EventKeyValues - 事件键与其数据类型的映射。
+ * @param {string} [selfId] - 当前实例的唯一标识符。如果未提供，将自动生成一个随机 ID。
+ *
+ * @example
+ * // 创建一个 EventFetch 实例，使用自定义 ID
+ * const eventFetch = new EventFetch<EventFetchApis, EventKeyValues>("my-instance-id");
+ *
+ * @example
+ * // 创建一个 EventFetch 实例，自动生成 ID
+ * const eventFetch = new EventFetch<EventFetchApis, EventKeyValues>();
+ */
   constructor(selfId?: string) {
     super();
     this._selfId = selfId ?? this._createSelfId();
