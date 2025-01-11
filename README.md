@@ -1,3 +1,5 @@
+# 该文档使用AI生成
+
 # EventEmitter 和 EventFetch
 
 这是一个基于 TypeScript 的事件驱动库，提供了 `EventEmitter` 和 `EventFetch` 两个核心类，用于处理事件的订阅、触发以及请求-响应机制。
