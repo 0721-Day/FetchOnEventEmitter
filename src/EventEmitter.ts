@@ -55,7 +55,7 @@ export default class EventEmitter<EventKeyValues> {
    */
   public on<EventKey extends keyof EventKeyValues>(
     events: EventKey | EventKey[] | "*",
-    handler: (data: EventKeyValues[EventKey] & { eventTag: EventKey }) => void,
+    handler: (data: EventKeyValues[EventKey] & { eventTag: EventKey }) => void | Promise<void>,
     options: { once?: boolean; priority?: number } = {}
   ): () => void {
     const { once = false, priority = 10 } = options;
@@ -156,11 +156,18 @@ export default class EventEmitter<EventKeyValues> {
   public async emit<EventKey extends keyof EventKeyValues>(
     event: EventKey,
     data: EventKeyValues[EventKey]
-  ): Promise<void> {
+  ): Promise<EventKeyValues[EventKey]> {
     const handlers = this._events[event];
     if (handlers) {
       for (const { handler, once } of handlers) {
-        await handler({ ...data, eventTag: event });
+        try {
+          await handler({ ...data, eventTag: event });
+        } catch (error) {
+          console.error(
+            `Error in event handler for event ${event.toString()}:`,
+            error
+          );
+        }
         if (once) this.off(event, handler);
       }
     }
@@ -170,5 +177,7 @@ export default class EventEmitter<EventKeyValues> {
       await handler({ ...data, eventTag: event });
       if (once) this._offAll(handler);
     }
+
+    return data;
   }
 }
